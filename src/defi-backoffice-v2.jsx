@@ -447,6 +447,8 @@ export default function App(){
       } finally {
         setLoading(false);
       }
+          }
+      
     }
 
     fetchWalletData();
