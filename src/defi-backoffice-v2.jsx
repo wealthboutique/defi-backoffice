@@ -8,6 +8,9 @@ const DEBANK_API_CONFIG = {
   rateLimit: 100 // requests per second
 };
 
+// Test wallet address
+const TEST_WALLET_ADDRESS = '0x4061d0F768C7ffDc8dbfD72a520861dDFdf3c106';
+
 // API Helper Functions
 const debankAPI = {
   // Get user total balance on all chains
@@ -416,4 +419,30 @@ export default function App(){
       {view==="overview"&&<OverviewView/>}{view==="holdings"&&<HoldingsView/>}{view==="earnings"&&<EarningsView/>}{view==="airdrops"&&<AirdropsView/>}{view==="scam"&&<ScamView/>}
     </main>
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&family=IBM+Plex+Mono:wght@400;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0;}::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:${T.bg0};}::-webkit-scrollbar-thumb{background:${T.border};border-radius:3px;}button{transition:all 0.15s;}input::placeholder{color:${T.text3};}`}</style>
-  </div>);}
+  <
+    
+    /*
+ * USAGE INSTRUCTIONS FOR DEBANK API:
+ * 
+ * To fetch real data from DeBank API for the test wallet:
+ * 
+ * Example 1: Get total balance
+ * const data = await debankAPI.getUserTotalBalance(TEST_WALLET_ADDRESS);
+ * console.log(data);
+ * 
+ * Example 2: Get tokens on Ethereum
+ * const tokens = await debankAPI.getUserTokenList(TEST_WALLET_ADDRESS, 'eth');
+ * console.log(tokens);
+ * 
+ * Example 3: Get protocol positions on Ethereum
+ * const protocols = await debankAPI.getUserComplexProtocolList(TEST_WALLET_ADDRESS, 'eth');
+ * console.log(protocols);
+ * 
+ * Example 4: Get transaction history
+ * const history = await debankAPI.getUserHistoryList(TEST_WALLET_ADDRESS, 'eth');
+ * console.log(history);
+ * 
+ * NOTE: You need to purchase DeBank API units at https://cloud.debank.com/open-api
+ * Current balance: 0 units
+ * Or request a 14-day free trial by contacting: hello.cloud@debank.com
+ *//div>);}
