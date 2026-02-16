@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { AreaChart, Area, BarChart, Bar, useEffect, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 // DeBank API Configuration
 const DEBANK_API_CONFIG = {
@@ -401,7 +401,85 @@ export default function App(){
   const scamAlert=AIRDROPS.filter(a=>!a.verified).length;const pendAlert=AIRDROPS.filter(a=>a.status==="Pending").length;
   return(<div style={{minHeight:"100vh",background:T.bg0,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",color:T.text1,display:"flex"}}>
     <aside style={{width:224,background:T.bg1,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",position:"fixed",top:0,left:0,bottom:0,zIndex:20}}>
+        // State for real DeBank API data
+  const [walletData, setWalletData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [useRealData, setUseRealData] = useState(true); // Toggle between demo and real data
+
+  // Fetch data from DeBank API on component mount
+  useEffect(() => {
+    async function fetchWalletData() {
+      if (!useRealData) {
+        setLoading(false);
+        return; // Use demo data
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('Fetching DeBank data for wallet:', TEST_WALLET_ADDRESS);
+        
+        // Fetch data in parallel
+        const [totalBalanceData, ethTokens, ethProtocols] = await Promise.all([
+          debankAPI.getUserTotalBalance(TEST_WALLET_ADDRESS),
+          debankAPI.getUserTokenList(TEST_WALLET_ADDRESS, 'eth', true),
+          debankAPI.getUserComplexProtocolList(TEST_WALLET_ADDRESS, 'eth')
+        ]);
+
+        setWalletData({
+          totalBalance: totalBalanceData,
+          ethTokens: ethTokens,
+          ethProtocols: ethProtocols
+        });
+        
+        console.log('DeBank data loaded successfully:', {
+          totalBalance: totalBalanceData,
+          tokensCount: ethTokens.length,
+          protocolsCount: ethProtocols.length
+        });
+      } catch (err) {
+        console.error('Error fetching DeBank data:', err);
+        setError(err.message || 'Failed to fetch wallet data');
+        // Fallback to demo data on error
+        setUseRealData(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchWalletData();
+  }, [useRealData]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{minHeight:"100vh",background:"T.bg0",fontFamily:"'DM Sans','Helvetica Neue',sans-serif",color:"T.text1",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:24,marginBottom:16}}>Loading DeBank data...</div>
+          <div style={{fontSize:14,color:"T.text3"}}>Wallet: {TEST_WALLET_ADDRESS.slice(0,6)}...{TEST_WALLET_ADDRESS.slice(-4)}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state with fallback to demo data
+  if (error && !walletData) {
+    console.warn('Using demo data due to error:', error);
+  }
+
       <div style={{padding:"24px 20px 20px",borderBottom:`1px solid ${T.border}`}}>
+              {/* Data Source Banner */}
+      {walletData ? (
+        <div style={{padding:"12px 24px",background:"linear-gradient(135deg,#10b981,#059669)",color:"white",fontSize:13,fontWeight:600,textAlign:"center"}}>
+          ✓ LIVE DATA: Connected to DeBank API | Wallet: {TEST_WALLET_ADDRESS.slice(0,6)}...{TEST_WALLET_ADDRESS.slice(-4)}
+        </div>
+      ) : (
+        <div style={{padding:"12px 24px",background:"linear-gradient(135deg,#f59e0b,#d97706)",color:"white",fontSize:13,fontWeight:600,textAlign:"center"}}>
+          ⚠ DEMO MODE: Using mock data | Waiting for DeBank API credits | <button onClick={()=>setUseRealData(true)} style={{marginLeft:8,padding:"4px 12px",background:"rgba(255,255,255,0.2)",border:"1px solid white",borderRadius:4,color:"white",cursor:"pointer"}}>Retry Connection</button>
+        </div>
+      )}
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:30,height:30,borderRadius:7,background:`linear-gradient(135deg,${T.blue},${T.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>⬡</div>
           <div><div style={{fontSize:15,fontWeight:800,color:T.text0,letterSpacing:"-0.5px"}}>DefiVault</div><div style={{fontSize:9,color:T.text3,letterSpacing:2,textTransform:"uppercase"}}>Fund Backoffice</div></div>
