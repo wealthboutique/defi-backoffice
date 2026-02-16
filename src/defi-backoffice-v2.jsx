@@ -449,7 +449,7 @@ export default function App(){
       }
     
       
-
+  }
     fetchWalletData();
   }, [useRealData]);
 
