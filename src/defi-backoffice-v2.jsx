@@ -1,6 +1,88 @@
 import { useState, useMemo } from "react";
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
+// DeBank API Configuration
+const DEBANK_API_CONFIG = {
+  baseURL: 'https://pro-openapi.debank.com',
+  accessKey: 'b84e3d589872b7926f7c8608406e05d4df16f513',
+  rateLimit: 100 // requests per second
+};
+
+// API Helper Functions
+const debankAPI = {
+  // Get user total balance on all chains
+  getUserTotalBalance: async (address) => {
+    const response = await fetch(
+      `${DEBANK_API_CONFIG.baseURL}/v1/user/total_balance?id=${address}`,
+      {
+        headers: {
+          'accept': 'application/json',
+          'AccessKey': DEBANK_API_CONFIG.accessKey
+        }
+      }
+    );
+    return response.json();
+  },
+  
+  // Get user token list on a specific chain
+  getUserTokenList: async (address, chainId, isAll = true) => {
+    const response = await fetch(
+      `${DEBANK_API_CONFIG.baseURL}/v1/user/token_list?id=${address}&chain_id=${chainId}&is_all=${isAll}`,
+      {
+        headers: {
+          'accept': 'application/json',
+          'AccessKey': DEBANK_API_CONFIG.accessKey
+        }
+      }
+    );
+    return response.json();
+  },
+  
+  // Get user complex protocol list on a chain
+  getUserComplexProtocolList: async (address, chainId) => {
+    const response = await fetch(
+      `${DEBANK_API_CONFIG.baseURL}/v1/user/complex_protocol_list?id=${address}&chain_id=${chainId}`,
+      {
+        headers: {
+          'accept': 'application/json',
+          'AccessKey': DEBANK_API_CONFIG.accessKey
+        }
+      }
+    );
+    return response.json();
+  },
+  
+  // Get user history list
+  getUserHistoryList: async (address, chainId, startTime = null, pageCount = 20) => {
+    let url = `${DEBANK_API_CONFIG.baseURL}/v1/user/history_list?id=${address}&chain_id=${chainId}&page_count=${pageCount}`;
+    if (startTime) {
+      url += `&start_time=${startTime}`;
+    }
+    const response = await fetch(url, {
+      headers: {
+        'accept': 'application/json',
+        'AccessKey': DEBANK_API_CONFIG.accessKey
+      }
+    });
+    return response.json();
+  },
+  
+  // Get chain list
+  getChainList: async () => {
+    const response = await fetch(
+      `${DEBANK_API_CONFIG.baseURL}/v1/chain/list`,
+      {
+        headers: {
+          'accept': 'application/json',
+          'AccessKey': DEBANK_API_CONFIG.accessKey
+        }
+      }
+    );
+    return response.json();
+  }
+};
+
+
 const T={bg0:"#03070F",bg1:"#080F1E",bg2:"#0C1628",bg3:"#101E35",border:"#152035",text0:"#EDF2FF",text1:"#9DB4D6",text2:"#526680",text3:"#2E4060",green:"#00E5A0",red:"#FF3B6A",amber:"#FFB020",blue:"#4E9EFF",purple:"#A855F7"};
 const CHAINS={ethereum:{name:"Ethereum",short:"ETH",color:"#627EEA",icon:"Ξ"},arbitrum:{name:"Arbitrum",short:"ARB",color:"#28A0F0",icon:"△"},optimism:{name:"Optimism",short:"OP",color:"#FF0420",icon:"⊙"},base:{name:"Base",short:"BASE",color:"#0052FF",icon:"◎"},polygon:{name:"Polygon",short:"MATIC",color:"#8247E5",icon:"⬡"},solana:{name:"Solana",short:"SOL",color:"#9945FF",icon:"◎"},cosmos:{name:"Cosmos",short:"ATOM",color:"#6F7390",icon:"⚛"},avalanche:{name:"Avalanche",short:"AVAX",color:"#E84142",icon:"▲"},bsc:{name:"BNB Chain",short:"BNB",color:"#F0B90B",icon:"⬡"}};
 const HOLDINGS=[
