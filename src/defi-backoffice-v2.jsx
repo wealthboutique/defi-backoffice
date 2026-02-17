@@ -222,8 +222,8 @@ function PortfolioStateView({holdings=HOLDINGS_DEMO}){
  <Card style={{padding:"20px 22px"}}>
  <SH title="Strategy Allocation" sub="By protocol category"/>
  <div>{catAlloc.map(([cat,val],i)=>{const p=(val/totalTVL*100);return(<div key={i} style={{marginBottom:12}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:12,color:T.text1}}>{cat}</span><span style={{fontSize:12,color:T.text0,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}}>{usd(val,true)} <span style={{color:T.text3,fontWeight:400}}>({p.toFixed(1)}%)</span></span></div><div style={{height:5,background:T.bg3,borderRadius:3}}><div style={{height:"100%",width:`${p}%`,background:CC2[i%CC2.length],borderRadius:3,transition:"width 0.4s"}}/></div></div>);})} 
- </Card>
- </div>
+  </div>
+  </Card>
  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
  <Card style={{padding:"20px 22px"}}>
  <SH title="Risk Profile" sub="Capital by risk level"/>
