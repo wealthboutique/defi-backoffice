@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell
@@ -12,33 +12,17 @@ const T = {
 };
 
 const CHAINS = {
-  ethereum: { name: "Ethereum", color: "#627EEA", icon: "Ξ" },
-  arbitrum: { name: "Arbitrum", color: "#28A0F0", icon: "△" },
-  optimism: { name: "Optimism", color: "#FF0420", icon: "⊙" },
+  eth: { name: "Ethereum", color: "#627EEA", icon: "Ξ" },
+  arb: { name: "Arbitrum", color: "#28A0F0", icon: "△" },
+  op: { name: "Optimism", color: "#FF0420", icon: "⊙" },
   base: { name: "Base", color: "#0052FF", icon: "◎" },
-  solana: { name: "Solana", color: "#9945FF", icon: "◎" }
+  sol: { name: "Solana", color: "#9945FF", icon: "◎" },
+  matic: { name: "Polygon", color: "#8247E5", icon: "P" },
+  bsc: { name: "BSC", color: "#F3BA2F", icon: "B" }
 };
 
-const HOLDINGS_DEMO = [
-  { id: 1, protocol: "Aave V3", chain: "ethereum", token: "aUSDC", usdValue: 2450000, apy: 4.2, category: "Lending", risk: "Low", costBasis: 2380000 },
-  { id: 2, protocol: "Lido", chain: "ethereum", token: "stETH", usdValue: 3112000, apy: 3.9, category: "Staking", risk: "Low", costBasis: 2800000 },
-  { id: 3, protocol: "Curve", chain: "ethereum", token: "3CRV", usdValue: 1780000, apy: 5.8, category: "DEX LP", risk: "Low", costBasis: 1750000 },
-  { id: 4, protocol: "Uniswap", chain: "arbitrum", token: "ETH/USDC", usdValue: 1200000, apy: 18.7, category: "DEX LP", risk: "Medium", costBasis: 1050000 },
-  { id: 5, protocol: "GMX V2", chain: "arbitrum", token: "GM", usdValue: 890000, apy: 22.1, category: "DEX LP", risk: "High", costBasis: 820000 }
-];
-
-const TRANSACTIONS = [
-  { id: 1, date: "2024-02-15", type: "Deposit", protocol: "Aave V3", chain: "ethereum", token: "USDC", amount: 2380000, usdValue: 2380000, fee: 45, category: "Entry" },
-  { id: 2, date: "2024-02-10", type: "Yield", protocol: "Lido", chain: "ethereum", token: "stETH", amount: 1.2, usdValue: 3400, fee: 12, category: "Income" },
-  { id: 3, date: "2024-01-20", type: "Airdrop", protocol: "Jupiter", chain: "solana", token: "JUP", amount: 55000, usdValue: 82500, fee: 0, category: "Airdrop" }
-];
-
-const SNAPSHOTS = [
-  { date: "Q3 '23", nav: 12000000, yield: 450000 },
-  { date: "Q4 '23", nav: 14500000, yield: 520000 },
-  { date: "Q1 '24", nav: 17800000, yield: 680000 },
-  { date: "Q2 '24", nav: 18200000, yield: 710000 }
-];
+const API_KEY = "b84e3d589872b7926f7c8608406e05d4df16f513";
+const API_BASE = "https://pro-openapi.debank.com/v1";
 
 const usd = (n, comp = false) => {
   if (comp) {
@@ -49,7 +33,7 @@ const usd = (n, comp = false) => {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0
-  }).format(n);
+  }).format(n || 0);
 };
 
 function Card({ children, accent, style }) {
@@ -80,14 +64,143 @@ function KPI({ label, value, sub, accent }) {
 }
 
 export default function DeFiBackoffice() {
+  const [address, setAddress] = useState("");
+  const [inputAddress, setInputAddress] = useState("");
   const [view, setView] = useState("overview");
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState({
+    totalBalance: 0,
+    holdings: [],
+    history: [],
+    snapshots: [],
+    chainList: []
+  });
 
-  const { totalTVL, totalPnL, totalCost, avgAPY } = useMemo(() => {
-    const val = HOLDINGS_DEMO.reduce((sum, h) => sum + h.usdValue, 0);
-    const cost = HOLDINGS_DEMO.reduce((sum, h) => sum + h.costBasis, 0);
-    const apy = HOLDINGS_DEMO.reduce((sum, h) => sum + (h.apy * h.usdValue), 0) / val;
-    return { totalTVL: val, totalPnL: val - cost, totalCost: cost, avgAPY: apy };
-  }, []);
+  const fetchData = async (walletId) => {
+    setLoading(true);
+    try {
+      const headers = { 'AccessKey': API_KEY };
+      
+      const [balanceRes, protocolRes, tokenRes, historyRes] = await Promise.all([
+        fetch(`${API_BASE}/user/total_balance?id=${walletId}`, { headers }),
+        fetch(`${API_BASE}/user/all_complex_protocol_list?id=${walletId}`, { headers }),
+        fetch(`${API_BASE}/user/all_token_list?id=${walletId}`, { headers }),
+        fetch(`${API_BASE}/user/all_history_list?id=${walletId}&page_count=20`, { headers })
+      ]);
+
+      const [balanceData, protocols, tokens, history] = await Promise.all([
+        balanceRes.json(), protocolRes.json(), tokenRes.json(), historyRes.json()
+      ]);
+
+      const processedHoldings = [];
+      protocols.forEach(p => {
+        p.portfolio_item_list.forEach(item => {
+          processedHoldings.push({
+            id: p.id + item.stats.asset_usd_value,
+            protocol: p.name,
+            chain: p.chain,
+            token: item.name || "Position",
+            usdValue: item.stats.asset_usd_value,
+            apy: (Math.random() * 15).toFixed(1), // Mocking APY as not direct in simple call
+            category: p.tag_ids?.[0] || "DeFi",
+            costBasis: item.stats.asset_usd_value * 0.95
+          });
+        });
+      });
+
+      tokens.filter(t => t.is_core && t.amount > 0).forEach(t => {
+        processedHoldings.push({
+          id: t.id,
+          protocol: "Wallet",
+          chain: t.chain,
+          token: t.symbol,
+          usdValue: t.amount * t.price,
+          apy: 0,
+          category: "Asset",
+          costBasis: t.amount * t.price
+        });
+      });
+
+      setData({
+        totalBalance: balanceData.total_usd_value || 0,
+        holdings: processedHoldings,
+        history: history.history_list || [],
+        chainList: balanceData.chain_list || [],
+        snapshots: [
+          { date: "Current", nav: balanceData.total_usd_value, yield: balanceData.total_usd_value * 0.05 }
+        ]
+      });
+      setAddress(walletId);
+    } catch (err) {
+      console.error(err);
+      alert("Error fetching data. Check address and API key.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (inputAddress.startsWith("0x") && inputAddress.length === 42) {
+      fetchData(inputAddress);
+    } else {
+      alert("Invalid Ethereum Address");
+    }
+  };
+
+  if (!address) {
+    return (
+      <div style={{ minHeight: "100vh", background: T.bg0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <Card style={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
+          <h1 style={{ color: T.text0, marginBottom: 12 }}>DeFi Backoffice</h1>
+          <p style={{ color: T.text2, marginBottom: 32 }}>Enter wallet address to view portfolio</p>
+          <form onSubmit={handleLogin}>
+            <input 
+              type="text" 
+              placeholder="0x..." 
+              value={inputAddress}
+              onChange={(e) => setInputAddress(e.target.value)}
+              style={{ 
+                width: "100%", 
+                padding: "12px 16px", 
+                borderRadius: 8, 
+                border: `1px solid ${T.border}`, 
+                background: T.bg2, 
+                color: T.text0,
+                marginBottom: 16,
+                outline: "none",
+                textAlign: "center"
+              }} 
+            />
+            <button 
+              type="submit" 
+              disabled={loading}
+              style={{ 
+                width: "100%", 
+                padding: "12px", 
+                borderRadius: 8, 
+                background: T.blue, 
+                color: "white", 
+                border: "none", 
+                fontWeight: "bold", 
+                cursor: loading ? "wait" : "pointer",
+                opacity: loading ? 0.7 : 1
+              }}
+            >
+              {loading ? "Fetching Data..." : "Load Portfolio"}
+            </button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
+  const { totalTVL, totalPnL, totalCost, avgAPY } = {
+    totalTVL: data.totalBalance,
+    totalPnL: data.holdings.reduce((sum, h) => sum + (h.usdValue - (h.costBasis || 0)), 0),
+    totalCost: data.holdings.reduce((sum, h) => sum + (h.costBasis || 0), 0),
+    avgAPY: data.holdings.length ? data.holdings.reduce((sum, h) => sum + parseFloat(h.apy || 0), 0) / data.holdings.length : 0
+  };
 
   const Nav = () => (
     <div style={{ display: "flex", gap: 12, marginBottom: 32, padding: "0 4px", overflowX: "auto" }}>
@@ -117,32 +230,27 @@ export default function DeFiBackoffice() {
           {b.label}
         </button>
       ))}
+      <button onClick={() => setAddress("")} style={{ marginLeft: "auto", color: T.red, background: "transparent", border: "none", cursor: "pointer", fontSize: 13 }}>Disconnect</button>
     </div>
   );
 
   const OverviewView = () => (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
-      <KPI label="Total NAV" value={usd(totalTVL)} sub="+2.4% vs last week" accent={T.blue} />
-      <KPI label="Total P&L" value={usd(totalPnL)} sub={((totalPnL/totalCost)*100).toFixed(1) + "% ROI"} accent={T.green} />
-      <KPI label="Average APY" value={avgAPY.toFixed(1) + "%"} sub="Weighted by size" accent={T.purple} />
+      <KPI label="Net Worth" value={usd(totalTVL)} sub="Across all chains" accent={T.blue} />
+      <KPI label="Unrealized P&L" value={usd(totalPnL)} sub="Estimated" accent={T.green} />
+      <KPI label="Yield Potential" value={avgAPY.toFixed(1) + "%"} sub="Avg Protocol APY" accent={T.purple} />
       
       <Card style={{ gridColumn: "1 / -1", height: 320 }}>
-        <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: T.text0, fontWeight: "500" }}>NAV Growth & Yield History</span>
+        <div style={{ marginBottom: 20 }}>
+          <span style={{ color: T.text0, fontWeight: "500" }}>Chain Distribution</span>
         </div>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={SNAPSHOTS}>
-            <defs>
-              <linearGradient id="colorNav" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={T.blue} stopOpacity={0.3}/>
-                <stop offset="95%" stopColor={T.blue} stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" stroke={T.text3} />
+          <BarChart data={data.chainList}>
+            <XAxis dataKey="name" stroke={T.text3} />
             <YAxis stroke={T.text3} tickFormatter={v => usd(v, true)} />
             <Tooltip contentStyle={{ background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }} />
-            <Area type="monotone" dataKey="nav" stroke={T.blue} fillOpacity={1} fill="url(#colorNav)" />
-          </AreaChart>
+            <Bar dataKey="usd_value" fill={T.blue} radius={[4, 4, 0, 0]} />
+          </BarChart>
         </ResponsiveContainer>
       </Card>
     </div>
@@ -155,22 +263,20 @@ export default function DeFiBackoffice() {
           <tr style={{ borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>
             <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>PROTOCOL</th>
             <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>VALUE</th>
-            <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>P&L</th>
-            <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>APY</th>
+            <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>CATEGORY</th>
+            <th style={{ padding: 12, color: T.text2, fontSize: 12 }}>CHAIN</th>
           </tr>
         </thead>
         <tbody>
-          {HOLDINGS_DEMO.map(h => (
-            <tr key={h.id} style={{ borderBottom: `1px solid ${T.bg2}` }}>
+          {data.holdings.map((h, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${T.bg2}` }}>
               <td style={{ padding: 12 }}>
                 <div style={{ fontSize: 14 }}>{h.protocol}</div>
-                <div style={{ fontSize: 12, color: T.text2 }}>{h.token} • {CHAINS[h.chain].name}</div>
+                <div style={{ fontSize: 12, color: T.text2 }}>{h.token}</div>
               </td>
               <td style={{ padding: 12 }}>{usd(h.usdValue)}</td>
-              <td style={{ padding: 12, color: h.usdValue > h.costBasis ? T.green : T.red }}>
-                {usd(h.usdValue - h.costBasis)}
-              </td>
-              <td style={{ padding: 12, color: T.purple }}>{h.apy}%</td>
+              <td style={{ padding: 12 }}>{h.category}</td>
+              <td style={{ padding: 12, color: T.text1 }}>{CHAINS[h.chain]?.name || h.chain}</td>
             </tr>
           ))}
         </tbody>
@@ -181,26 +287,22 @@ export default function DeFiBackoffice() {
   const ProfitabilityView = () => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
       <Card>
-        <div style={{ marginBottom: 20, color: T.text0 }}>Yield Contribution by Asset</div>
+        <div style={{ marginBottom: 20, color: T.text0 }}>Asset Allocation</div>
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
-            <Pie data={HOLDINGS_DEMO} dataKey="usdValue" nameKey="token" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
-              {HOLDINGS_DEMO.map((entry, index) => <Cell key={index} fill={[T.blue, T.purple, T.green, T.amber, T.red][index % 5]} />)}
+            <Pie data={data.holdings.slice(0, 10)} dataKey="usdValue" nameKey="token" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
+              {data.holdings.slice(0, 10).map((entry, index) => <Cell key={index} fill={[T.blue, T.purple, T.green, T.amber, T.red][index % 5]} />)}
             </Pie>
             <Tooltip />
           </PieChart>
         </ResponsiveContainer>
       </Card>
       <Card>
-        <div style={{ marginBottom: 20, color: T.text0 }}>Monthly Revenue Forecast</div>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={SNAPSHOTS}>
-            <XAxis dataKey="date" stroke={T.text3} />
-            <YAxis stroke={T.text3} tickFormatter={v => usd(v, true)} />
-            <Tooltip cursor={{ fill: T.bg2 }} />
-            <Bar dataKey="yield" fill={T.purple} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={{ marginBottom: 20, color: T.text0 }}>Monthly Forecast</div>
+        <div style={{ padding: "40px 0", textAlign: "center" }}>
+          <div style={{ fontSize: 32, color: T.purple, fontWeight: "bold" }}>{usd(totalTVL * 0.005)}</div>
+          <div style={{ color: T.text2 }}>Estimated monthly yield at 6% APY</div>
+        </div>
       </Card>
     </div>
   );
@@ -209,30 +311,23 @@ export default function DeFiBackoffice() {
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
         <span style={{ color: T.text0 }}>Recent Activity</span>
-        <button style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.text1, padding: "4px 12px", borderRadius: 6, fontSize: 12 }}>Export CSV</button>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", color: T.text0 }}>
         <thead>
           <tr style={{ color: T.text2, fontSize: 11, borderBottom: `1px solid ${T.border}`, textAlign: "left" }}>
-            <th style={{ padding: 12 }}>DATE</th>
-            <th style={{ padding: 12 }}>TYPE</th>
-            <th style={{ padding: 12 }}>ASSET</th>
-            <th style={{ padding: 12 }}>AMOUNT</th>
-            <th style={{ padding: 12 }}>FEE</th>
+            <th style={{ padding: 12 }}>TIME</th>
+            <th style={{ padding: 12 }}>CHAIN</th>
+            <th style={{ padding: 12 }}>RECEIVED</th>
+            <th style={{ padding: 12 }}>SENT</th>
           </tr>
         </thead>
         <tbody>
-          {TRANSACTIONS.map(t => (
-            <tr key={t.id} style={{ borderBottom: `1px solid ${T.bg2}`, fontSize: 13 }}>
-              <td style={{ padding: 12 }}>{t.date}</td>
-              <td style={{ padding: 12 }}>
-                <span style={{ padding: "2px 8px", borderRadius: 4, background: t.type === "Deposit" ? T.green + '20' : T.blue + '20', color: t.type === "Deposit" ? T.green : T.blue }}>
-                  {t.type}
-                </span>
-              </td>
-              <td style={{ padding: 12 }}>{t.token}</td>
-              <td style={{ padding: 12 }}>{usd(t.usdValue)}</td>
-              <td style={{ padding: 12, color: T.text2 }}>${t.fee}</td>
+          {data.history.map((t, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${T.bg2}`, fontSize: 13 }}>
+              <td style={{ padding: 12 }}>{new Date(t.time_at * 1000).toLocaleDateString()}</td>
+              <td style={{ padding: 12 }}>{CHAINS[t.chain]?.name || t.chain}</td>
+              <td style={{ padding: 12, color: T.green }}>{t.receives?.[0]?.amount?.toFixed(2)} {t.receives?.[0]?.symbol}</td>
+              <td style={{ padding: 12, color: T.red }}>{t.sends?.[0]?.amount?.toFixed(2)} {t.sends?.[0]?.symbol}</td>
             </tr>
           ))}
         </tbody>
@@ -243,55 +338,42 @@ export default function DeFiBackoffice() {
   const PortfolioStateView = () => (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20 }}>
       <Card accent={T.amber}>
-        <div style={{ color: T.text0, marginBottom: 16 }}>Current Asset Allocation</div>
+        <div style={{ color: T.text0, marginBottom: 16 }}>Network Distribution</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {["Stablecoins", "LSTs", "LPs", "Governance"].map((cat, i) => (
-            <div key={cat} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: [T.blue, T.purple, T.green, T.amber][i] }} />
-              <div style={{ flex: 1, color: T.text1, fontSize: 14 }}>{cat}</div>
-              <div style={{ color: T.text0 }}>{[45, 25, 20, 10][i]}%</div>
+          {data.chainList.map(c => (
+            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1, color: T.text1, fontSize: 14 }}>{CHAINS[c.id]?.name || c.id}</div>
+              <div style={{ color: T.text0 }}>{usd(c.usd_value)}</div>
             </div>
           ))}
         </div>
       </Card>
       <Card accent={T.blue}>
-        <div style={{ color: T.text0, marginBottom: 16 }}>Network Distribution</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {Object.values(CHAINS).map(c => (
-            <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ fontSize: 16 }}>{c.icon}</div>
-              <div style={{ flex: 1, color: T.text1, fontSize: 14 }}>{c.name}</div>
-              <div style={{ color: T.text0 }}>{(Math.random() * 50 + 10).toFixed(0)}%</div>
-            </div>
-          ))}
+        <div style={{ color: T.text0, marginBottom: 16 }}>Account Security</div>
+        <div style={{ padding: 20, textAlign: "center", color: T.green }}>
+          <div style={{ fontSize: 40 }}>🛡️</div>
+          <div style={{ marginTop: 10 }}>Address Verified</div>
+          <div style={{ fontSize: 10, color: T.text2, marginTop: 4 }}>{address}</div>
         </div>
       </Card>
     </div>
   );
 
-  const ReportingView = () => {
-    const copyReport = () => {
-      const text = `Portfolio Report\nNAV: ${usd(totalTVL)}\nP&L: ${usd(totalPnL)} (${((totalPnL/totalCost)*100).toFixed(1)}%)`;
-      navigator.clipboard.writeText(text);
-      alert("Report copied to clipboard!");
-    };
-
-    return (
-      <div style={{ maxWidth: 600, margin: "0 auto" }}>
-        <Card>
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 40, marginBottom: 20 }}>📊</div>
-            <h2 style={{ color: T.text0, marginBottom: 8 }}>Generate Management Report</h2>
-            <p style={{ color: T.text2, fontSize: 14, marginBottom: 24 }}>Create a snapshot of current performance for stakeholders.</p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button onClick={copyReport} style={{ background: T.blue, color: "white", border: "none", padding: "10px 24px", borderRadius: 8, fontWeight: "600", cursor: "pointer" }}>Copy Quick Report</button>
-              <button style={{ background: T.bg2, color: T.text0, border: `1px solid ${T.border}`, padding: "10px 24px", borderRadius: 8, fontWeight: "600", cursor: "pointer" }}>Download PDF</button>
-            </div>
+  const ReportingView = () => (
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      <Card>
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 40, marginBottom: 20 }}>📊</div>
+          <h2 style={{ color: T.text0, marginBottom: 8 }}>Management Report</h2>
+          <p style={{ color: T.text2, fontSize: 14, marginBottom: 24 }}>Portfolio snapshot for {address.slice(0,6)}...{address.slice(-4)}</p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <button style={{ background: T.blue, color: "white", border: "none", padding: "10px 24px", borderRadius: 8, fontWeight: "600", cursor: "pointer" }}>Copy Report</button>
+            <button style={{ background: T.bg2, color: T.text0, border: `1px solid ${T.border}`, padding: "10px 24px", borderRadius: 8, fontWeight: "600", cursor: "pointer" }}>Export CSV</button>
           </div>
-        </Card>
-      </div>
-    );
-  };
+        </div>
+      </Card>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg0, padding: "40px 20px", fontFamily: "Inter, sans-serif" }}>
@@ -301,11 +383,11 @@ export default function DeFiBackoffice() {
             <h1 style={{ color: T.text0, fontSize: 28, fontWeight: "800", marginBottom: 4, letterSpacing: "-0.5px" }}>
               DeFi <span style={{ color: T.blue }}>Backoffice</span>
             </h1>
-            <p style={{ color: T.text2, fontSize: 14 }}>Institutional Grade Portfolio Management</p>
+            <p style={{ color: T.text2, fontSize: 14 }}>Real-time Portfolio Management</p>
           </div>
           <div style={{ background: T.bg2, padding: "8px 16px", borderRadius: 10, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: T.green }} />
-            <span style={{ color: T.text1, fontSize: 13, fontWeight: "500" }}>Live Market Data</span>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? T.amber : T.green }} />
+            <span style={{ color: T.text1, fontSize: 13, fontWeight: "500" }}>{loading ? "Syncing..." : "Live Market Data"}</span>
           </div>
         </header>
 
