@@ -271,9 +271,7 @@ export default function DeFiBackoffice() {
 
   const ReportingView = () => {
     const copyReport = () => {
-      const text = "Portfolio Report\
-NAV: " + usd(totalTVL) + "\
-P&L: " + usd(totalPnL) + " (" + ((totalPnL/totalCost)*100).toFixed(1) + "%)";
+      const text = `Portfolio Report\nNAV: ${usd(totalTVL)}\nP&L: ${usd(totalPnL)} (${((totalPnL/totalCost)*100).toFixed(1)}%)`;
       navigator.clipboard.writeText(text);
       alert("Report copied to clipboard!");
     };
@@ -313,12 +311,12 @@ P&L: " + usd(totalPnL) + " (" + ((totalPnL/totalCost)*100).toFixed(1) + "%)";
 
         <Nav />
 
-        {view === "overview" &amp;&amp; <OverviewView />}
-        {view === "holdings" &amp;&amp; <HoldingsView />}
-        {view === "profitability" &amp;&amp; <ProfitabilityView />}
-        {view === "ledger" &amp;&amp; <LedgerView />}
-        {view === "state" &amp;&amp; <PortfolioStateView />}
-        {view === "reporting" &amp;&amp; <ReportingView />}
+        {view === "overview" && <OverviewView />}
+        {view === "holdings" && <HoldingsView />}
+        {view === "profitability" && <ProfitabilityView />}
+        {view === "ledger" && <LedgerView />}
+        {view === "state" && <PortfolioStateView />}
+        {view === "reporting" && <ReportingView />}
       </div>
     </div>
   );
